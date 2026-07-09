@@ -29,15 +29,15 @@ jobs:
 
       - name: Install rmapi
         run: |
-          curl -L -o rmapi.zip https://github.com/ddvk/rmapi/releases/latest/download/rmapi-linuxx86-64.zip
-          unzip rmapi.zip -d rmapi_bin
-          chmod +x rmapi_bin/rmapi
-          sudo mv rmapi_bin/rmapi /usr/local/bin/rmapi
+          curl -L https://github.com/ddvk/rmapi/releases/download/v0.0.29/rmapi-linuxx86-64.tar.gz -o rmapi.tar.gz
+          tar -xzf rmapi.tar.gz
+          chmod +x rmapi
+          sudo mv rmapi /usr/local/bin/rmapi
 
       - name: Restore rmapi auth config
         run: |
           mkdir -p ~/.config/rmapi
-          echo "${{ secrets.RMAPI_CONFIG }}" > ~/.config/rmapi/rmapi.conf
+          printf '%s\n' "${{ secrets.RMAPI_CONFIG }}" > ~/.config/rmapi/rmapi.conf
 
       - name: Upload to reMarkable
         run: |
