@@ -1,0 +1,45 @@
+name: Sync Google Calendar to reMarkable
+
+on:
+  schedule:
+    - cron: "30 4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r Scripts/requirements.txt
+
+      - name: Generate schedule PDF
+        env:
+          ICS_URL: ${{ secrets.ICS_URL }}
+          DAYS_AHEAD: "7"
+          TIMEZONE: "Europe/Belgrade"
+        run: python3 Scripts/generate_schedule.py
+
+      - name: Install rmapi
+        run: |
+          curl -L -o rmapi.zip https://github.com/ddvk/rmapi/releases/latest/download/rmapi-linuxx86-64.zip
+          unzip rmapi.zip -d rmapi_bin
+          chmod +x rmapi_bin/rmapi
+          sudo mv rmapi_bin/rmapi /usr/local/bin/rmapi
+
+      - name: Restore rmapi auth config
+        run: |
+          mkdir -p ~/.config/rmapi
+          echo "${{ secrets.RMAPI_CONFIG }}" > ~/.config/rmapi/rmapi.conf
+
+      - name: Upload to reMarkable
+        run: |
+          rmapi mkdir /Raspored || true
+          rmapi put output/raspored.pdf /Raspored
