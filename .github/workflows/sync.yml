@@ -20,13 +20,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r Scripts/requirements.txt
 
-      - name: Generate schedule PDF
       - name: Debug ICS_URL
         env:
           ICS_URL: ${{ secrets.ICS_URL }}
         run: |
           echo "Duzina linka: ${#ICS_URL}"
           echo "Prvih 10 karaktera: ${ICS_URL:0:10}"
+
+      - name: Generate schedule PDF
         env:
           ICS_URL: ${{ secrets.ICS_URL }}
           DAYS_AHEAD: "7"
