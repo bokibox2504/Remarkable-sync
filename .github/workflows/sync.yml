@@ -42,4 +42,5 @@ jobs:
       - name: Upload to reMarkable
         run: |
           rmapi mkdir /Raspored || true
+          rmapi rm /Raspored/raspored || true
           rmapi put output/raspored.pdf /Raspored
