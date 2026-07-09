@@ -47,6 +47,8 @@ jobs:
           printf '%s\n' "${{ secrets.RMAPI_CONFIG }}" > ~/.config/rmapi/rmapi.conf
 
       - name: Upload to reMarkable
+        env:
+          RMAPI_FORCE_SCHEMA_VERSION: "4"
         run: |
           rmapi mkdir /Raspored || true
           rmapi put output/raspored.pdf /Raspored
