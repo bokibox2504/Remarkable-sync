@@ -2,6 +2,8 @@
 """
 Generates a daily/weekly PDF schedule from a Google Calendar secret ICS feed,
 optimized for reMarkable Paper Pro Move (portrait, large readable text).
+Color-codes events by keyword, matching the user's Google Calendar scheme:
+11=red/urgent, 9=blue/deep work, 6=orange/admin, 2=green/personal, 8=graphite/buffer.
 
 Reads:
   ICS_URL       - Google Calendar "Secret address in iCal format"
@@ -18,7 +20,6 @@ import requests
 from datetime import datetime, timedelta
 from icalendar import Calendar
 import pytz
-from reportlab.lib.pagesizes import portrait
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
@@ -28,19 +29,37 @@ DAYS_AHEAD = int(os.environ.get("DAYS_AHEAD", "7"))
 TZ_NAME = os.environ.get("TIMEZONE", "Europe/Belgrade")
 TZ = pytz.timezone(TZ_NAME)
 
-# reMarkable Move screen ratio - use a tall portrait page similar to A5/A6-ish proportions
 PAGE_WIDTH = 130 * mm
 PAGE_HEIGHT = 180 * mm
 
-# Google Calendar colorId -> approximate RGB (fallback if not present in ICS)
-COLOR_MAP = {
-    "11": colors.HexColor("#D50000"),  # red - urgent
-    "9":  colors.HexColor("#3F51B5"),  # blue - deep work
-    "6":  colors.HexColor("#FF9800"),  # orange - admin
-    "2":  colors.HexColor("#4CAF50"),  # green - personal
-    "8":  colors.HexColor("#757575"),  # graphite - buffer
-}
-DEFAULT_COLOR = colors.HexColor("#212121")
+RED = colors.HexColor("#D50000")       # urgent
+BLUE = colors.HexColor("#3F51B5")      # deep work
+ORANGE = colors.HexColor("#FF9800")    # admin
+GREEN = colors.HexColor("#4CAF50")     # personal
+GRAPHITE = colors.HexColor("#757575")  # buffer
+BLACK = colors.HexColor("#212121")
+
+# Keyword -> color. Checked in order; first match wins. Case-insensitive, matches Serbian/Bosnian text.
+KEYWORD_RULES = [
+    (["hitno", "urgent", "rok", "krajnji"], RED),
+    (["poziv", "sastanak", "dogovor", "ministarstvo", "savez", "tsrs",
+      "elektrokrajina", "elektro", "kontakt", "administracija", "dokument",
+      "izvjestaj", "izvještaj", "prijava"], ORANGE),
+    (["priprema", "pisanje", "analiza", "plan rada", "raspored", "montaza",
+      "montaža", "snimanje", "emisija"], BLUE),
+    (["trening", "padel", "teren", "licno", "lično", "porodica", "rucak",
+      "ručak", "odmor"], GREEN),
+    (["pauza", "putovanje", "prevoz", "buffer", "cekanje", "čekanje"], GRAPHITE),
+]
+
+
+def classify_color(title):
+    t = title.lower()
+    for keywords, color in KEYWORD_RULES:
+        for kw in keywords:
+            if kw in t:
+                return color
+    return BLACK
 
 
 def fetch_events():
@@ -62,7 +81,6 @@ def fetch_events():
         summary = str(component.get("summary", "Bez naziva"))
         location = str(component.get("location", "") or "")
 
-        # Normalize to timezone-aware datetime
         if isinstance(dtstart, datetime):
             if dtstart.tzinfo is None:
                 dtstart = TZ.localize(dtstart)
@@ -70,7 +88,6 @@ def fetch_events():
                 dtstart = dtstart.astimezone(TZ)
             all_day = False
         else:
-            # date-only (all-day event)
             dtstart = TZ.localize(datetime(dtstart.year, dtstart.month, dtstart.day))
             all_day = True
 
@@ -80,6 +97,7 @@ def fetch_events():
                 "summary": summary,
                 "location": location,
                 "all_day": all_day,
+                "color": classify_color(summary),
             })
 
     events.sort(key=lambda e: e["start"])
@@ -120,16 +138,19 @@ def draw_day_page(c, day_date, day_events):
     else:
         for e in day_events:
             time_str = "Cijeli dan" if e["all_day"] else e["start"].strftime("%H:%M")
+
+            c.setFillColor(e["color"])
+            c.rect(10 * mm, y - 1 * mm, 1.5 * mm, 5.5 * mm, fill=1, stroke=0)
+
             c.setFont("Helvetica-Bold", 11)
             c.setFillColor(colors.black)
-            c.drawString(12 * mm, y, time_str)
+            c.drawString(14 * mm, y, time_str)
 
             c.setFont("Helvetica", 11)
-            c.setFillColor(colors.black)
             title = e["summary"]
-            if len(title) > 40:
-                title = title[:37] + "..."
-            c.drawString(32 * mm, y, title)
+            if len(title) > 38:
+                title = title[:35] + "..."
+            c.drawString(34 * mm, y, title)
 
             if e["location"]:
                 y -= 5 * mm
@@ -138,11 +159,11 @@ def draw_day_page(c, day_date, day_events):
                 loc = e["location"]
                 if len(loc) > 45:
                     loc = loc[:42] + "..."
-                c.drawString(32 * mm, y, f"📍 {loc}")
+                c.drawString(34 * mm, y, f"Lokacija: {loc}")
 
             y -= 9 * mm
             if y < 15 * mm:
-                break  # avoid overflow; keep it simple for v1
+                break
 
     c.showPage()
 
